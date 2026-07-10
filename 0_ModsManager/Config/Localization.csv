@@ -1,0 +1,27 @@
+Key,File,Type,UsedInMainMenu,NoTranslate,english
+xuiModManager,UI,XUI,x,,Mods Manager
+xuiModManagerHeading,UI,XUI,x,,MODS MANAGER
+xuiModManagerStatus,UI,XUI,x,,"Changes take effect after a full game restart."
+xuiModManagerActive,UI,XUI,x,,ACTIVE
+xuiModManagerDisabled,UI,XUI,x,,DISABLED
+xuiModManagerProtected,UI,XUI,x,,PROTECTED
+xuiModManagerEmpty,UI,XUI,x,,No mods found.
+xuiModManagerToggle,UI,XUI,x,,TOGGLE
+xuiModManagerEnable,UI,XUI,x,,ENABLE
+xuiModManagerDisable,UI,XUI,x,,DISABLE
+xuiModManagerLocked,UI,XUI,x,,LOCKED
+xuiModManagerRefresh,UI,XUI,x,,REFRESH
+xuiModManagerRestart,UI,XUI,x,,RESTART NEEDED
+xuiModManagerBack,UI,XUI,x,,BACK
+xuiModManagerPrev,UI,XUI,x,,PREV
+xuiModManagerNext,UI,XUI,x,,NEXT
+xuiModManagerSearchPrompt,UI,XUI,x,,Search mods
+xuiModManagerAll,UI,XUI,x,,ALL
+xuiModManagerDetails,UI,XUI,x,,DETAILS
+xuiModManagerFolder,UI,XUI,x,,FOLDER
+xuiModManagerLocation,UI,XUI,x,,LOCATION
+xuiModManagerRestartGame,UI,XUI,x,,RESTART GAME
+xuiModManagerWebsite,UI,XUI,x,,WEBSITE
+xuiModManagerConfig,UI,XUI,x,,CONFIG
+xuiModManagerUpdates,UI,XUI,x,,UPDATES
+xuiModManagerOpen,UI,XUI,x,,OPEN

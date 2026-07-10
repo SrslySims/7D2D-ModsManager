@@ -1,0 +1,7 @@
+<mod_manager_xui>
+  <insertAfter xpath="/xui/window_group[@name='serverBrowser']">
+    <window_group name="modManager" defaultselected="btnBack">
+      <window name="modManager" />
+    </window_group>
+  </insertAfter>
+</mod_manager_xui>

@@ -1,0 +1,16 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<xml>
+  <Name value="ModsManager" />
+  <DisplayName value="Mods Manager" />
+  <Description value="Manage active and disabled mod folders from the Play Game menu." />
+  <Author value="Srsly" />
+  <Version value="1.0.0" />
+  <Website value="https://7daystodiemods.com/profiles/srsly" />
+  <Icon value="ModsManager/icon.png" />
+  <Banner value="ModsManager/banner.png" />
+  <SkipWithAntiCheat value="true" />
+  <GameVersion value="3.0" />
+  <ModIcon value="ModsManager/icon.png" />
+  <ModBanner value="ModsManager/banner.png" />
+  <UpdateManifest value="https://raw.githubusercontent.com/SrslySims/7D2D-Mod-Manifests/main/manifests/ModsManager.xml" />
+</xml>
