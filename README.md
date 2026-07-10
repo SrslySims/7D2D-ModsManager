@@ -26,7 +26,7 @@ A full game restart is required after enabling/disabling mods or saving config c
 
 Mods Manager can show richer information for your mod and can expose supported config options directly in-game. See the full creator guide:
 
-[Creator Config Guide](docs/CREATOR_CONFIG_GUIDE.md)
+[Creator Config Guide *See WIKI]([docs/CREATOR_CONFIG_GUIDE.md](https://github.com/SrslySims/7D2D-ModsManager/wiki))
 
 ## Folder Layout
 
