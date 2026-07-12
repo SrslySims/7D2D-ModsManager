@@ -1110,8 +1110,23 @@ namespace SrslyModsManager
 
             if (setting == null)
             {
-                value = "";
-                return true;
+                switch (field)
+                {
+                    case "adjustenabled":
+                    case "swatchvisible":
+                        value = "false";
+                        return true;
+                    case "swatchcolor":
+                    case "dirtycolor":
+                        value = "0,0,0,0";
+                        return true;
+                    case "stripecolor":
+                        value = "170,170,170,255";
+                        return true;
+                    default:
+                        value = "";
+                        return true;
+                }
             }
 
             switch (field)
@@ -1488,6 +1503,7 @@ namespace SrslyModsManager
         }
     }
 }
+
 
 
 
