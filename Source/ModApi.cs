@@ -1,10 +1,11 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Net;
 using System.Globalization;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Xml;
@@ -376,6 +377,8 @@ namespace SrslyModsManager
         internal string Mode = "keyValue";
         internal string XPath = "";
         internal string Attribute = "";
+        internal string Presets = "";
+        internal string PresetFile = "";
         internal string CurrentValue = "";
         internal string PendingValue = "";
         internal string DefaultValue = "";
@@ -403,6 +406,24 @@ namespace SrslyModsManager
             }
         }
 
+        private string PresetOptionDisplayValue()
+        {
+            string pending = PendingValue ?? "";
+            string display = HumanizePresetName(pending);
+            int index = Options.FindIndex(o => string.Equals(o, pending, StringComparison.OrdinalIgnoreCase));
+            return index >= 0 ? display + " (" + (index + 1) + "/" + Options.Count + ")" : display;
+        }
+
+        private static string HumanizePresetName(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return "";
+            }
+
+            string spaced = Regex.Replace(value.Replace('_', ' ').Replace('-', ' '), @"(?<=[a-z])(?=[A-Z0-9])|(?<=[A-Z])(?=[A-Z][a-z])|(?<=[0-9])(?=[A-Za-z])", " ");
+            return Regex.Replace(spaced, @"\s+", " ").Trim();
+        }
         internal void Adjust(int direction)
         {
             if (Type.Equals("bool", StringComparison.OrdinalIgnoreCase))
@@ -478,6 +499,52 @@ namespace SrslyModsManager
             "#FFB3D1", "#B3195A"
         };
 
+        private sealed class NaturalPresetComparer : IComparer<string>
+        {
+            internal static readonly NaturalPresetComparer Instance = new NaturalPresetComparer();
+
+            public int Compare(string x, string y)
+            {
+                if (ReferenceEquals(x, y)) { return 0; }
+                if (x == null) { return -1; }
+                if (y == null) { return 1; }
+
+                int ix = 0;
+                int iy = 0;
+                while (ix < x.Length && iy < y.Length)
+                {
+                    char cx = x[ix];
+                    char cy = y[iy];
+                    if (char.IsDigit(cx) && char.IsDigit(cy))
+                    {
+                        long nx = ReadNumber(x, ref ix);
+                        long ny = ReadNumber(y, ref iy);
+                        int numberCompare = nx.CompareTo(ny);
+                        if (numberCompare != 0) { return numberCompare; }
+                        continue;
+                    }
+
+                    int charCompare = char.ToUpperInvariant(cx).CompareTo(char.ToUpperInvariant(cy));
+                    if (charCompare != 0) { return charCompare; }
+                    ix++;
+                    iy++;
+                }
+
+                return x.Length.CompareTo(y.Length);
+            }
+
+            private static long ReadNumber(string value, ref int index)
+            {
+                long number = 0;
+                while (index < value.Length && char.IsDigit(value[index]))
+                {
+                    number = Math.Min(999999999L, (number * 10) + (value[index] - '0'));
+                    index++;
+                }
+
+                return number;
+            }
+        }
         internal static List<ConfigSetting> LoadSettings(string modPath)
         {
             List<ConfigSetting> settings = new List<ConfigSetting>();
@@ -560,6 +627,10 @@ namespace SrslyModsManager
                     {
                         SaveXmlFile(targetPath, entry.Value);
                     }
+                    else if (mode.Equals("preset", StringComparison.OrdinalIgnoreCase))
+                    {
+                        SavePresetFile(modPath, targetPath, entry.Value);
+                    }
                     else
                     {
                         SaveKeyValueFile(targetPath, entry.Value);
@@ -615,6 +686,10 @@ namespace SrslyModsManager
                     return null;
                 }
             }
+            else if (mode.Equals("preset", StringComparison.OrdinalIgnoreCase))
+            {
+                // Preset settings copy a file from Presets/<choice>/ into the target.
+            }
             else if (string.IsNullOrWhiteSpace(key))
             {
                 return null;
@@ -637,6 +712,8 @@ namespace SrslyModsManager
                 Mode = mode,
                 XPath = xPath,
                 Attribute = attribute,
+                Presets = FirstNonEmpty(Attr(element, "presets"), "Presets"),
+                PresetFile = Attr(element, "presetFile"),
                 DefaultValue = Attr(element, "default"),
                 Min = Attr(element, "min"),
                 Max = Attr(element, "max"),
@@ -656,6 +733,24 @@ namespace SrslyModsManager
                     setting.Type = "choice";
                 }
             }
+            if (setting.Mode.Equals("preset", StringComparison.OrdinalIgnoreCase))
+            {
+                setting.Type = "choice";
+                if (string.IsNullOrWhiteSpace(setting.PresetFile))
+                {
+                    setting.PresetFile = Path.GetFileName(setting.Target);
+                }
+
+                if (setting.Options.Count == 0)
+                {
+                    setting.Options = DiscoverPresetOptions(modPath, setting);
+                }
+
+                if (setting.Options.Count == 0)
+                {
+                    return null;
+                }
+            }
             else if (setting.Type.Equals("color", StringComparison.OrdinalIgnoreCase))
             {
                 setting.Options = DefaultColorOptions.ToList();
@@ -664,7 +759,9 @@ namespace SrslyModsManager
 
             setting.CurrentValue = mode.Equals("xml", StringComparison.OrdinalIgnoreCase)
                 ? ReadXmlValue(targetPath, setting)
-                : ReadKeyValue(targetPath, key, setting.DefaultValue);
+                : mode.Equals("preset", StringComparison.OrdinalIgnoreCase)
+                    ? ReadPresetValue(modPath, targetPath, setting)
+                    : ReadKeyValue(targetPath, key, setting.DefaultValue);
             setting.PendingValue = setting.CurrentValue;
             if (setting.Options.Count == 0 && IsHexColor(setting.CurrentValue))
             {
@@ -741,6 +838,93 @@ namespace SrslyModsManager
             return defaultValue ?? "";
         }
 
+        private static List<string> DiscoverPresetOptions(string modPath, ConfigSetting setting)
+        {
+            List<string> options = new List<string>();
+            string presetsRoot = ResolveTargetPath(modPath, setting.Presets);
+            if (string.IsNullOrWhiteSpace(presetsRoot) || !Directory.Exists(presetsRoot))
+            {
+                return options;
+            }
+
+            string presetFile = FirstNonEmpty(setting.PresetFile, Path.GetFileName(setting.Target));
+            foreach (string directory in Directory.GetDirectories(presetsRoot).OrderBy(p => Path.GetFileName(p), NaturalPresetComparer.Instance))
+            {
+                string candidate = Path.Combine(directory, presetFile);
+                if (File.Exists(candidate))
+                {
+                    options.Add(Path.GetFileName(directory));
+                }
+            }
+
+            return options;
+        }
+
+        private static string ReadPresetValue(string modPath, string targetPath, ConfigSetting setting)
+        {
+            foreach (string option in setting.Options)
+            {
+                string presetPath = ResolvePresetFilePath(modPath, setting, option);
+                if (!string.IsNullOrWhiteSpace(presetPath) && File.Exists(presetPath) && FilesMatch(targetPath, presetPath))
+                {
+                    return option;
+                }
+            }
+
+            if (!string.IsNullOrWhiteSpace(setting.DefaultValue) && setting.Options.Any(o => o.Equals(setting.DefaultValue, StringComparison.OrdinalIgnoreCase)))
+            {
+                return setting.DefaultValue;
+            }
+
+            return setting.Options.Count > 0 ? setting.Options[0] : "";
+        }
+
+        private static bool FilesMatch(string leftPath, string rightPath)
+        {
+            string left = NormalizePresetText(File.ReadAllText(leftPath));
+            string right = NormalizePresetText(File.ReadAllText(rightPath));
+            return string.Equals(left, right, StringComparison.Ordinal);
+        }
+
+        private static string NormalizePresetText(string value)
+        {
+            string normalized = (value ?? "").Replace("\r\n", "\n").Trim();
+            return Regex.Replace(normalized, @">\s+<", "><");
+        }
+
+        private static string ResolvePresetFilePath(string modPath, ConfigSetting setting, string presetName)
+        {
+            if (string.IsNullOrWhiteSpace(presetName))
+            {
+                return "";
+            }
+
+            string presetsRoot = ResolveTargetPath(modPath, setting.Presets);
+            if (string.IsNullOrWhiteSpace(presetsRoot))
+            {
+                return "";
+            }
+
+            string presetFile = FirstNonEmpty(setting.PresetFile, Path.GetFileName(setting.Target));
+            string candidate = Path.Combine(presetsRoot, presetName, presetFile);
+            string full = Path.GetFullPath(candidate);
+            string root = Path.GetFullPath(modPath).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) + Path.DirectorySeparatorChar;
+            return full.StartsWith(root, StringComparison.OrdinalIgnoreCase) ? full : "";
+        }
+
+        private static void SavePresetFile(string modPath, string targetPath, List<ConfigSetting> settings)
+        {
+            foreach (ConfigSetting setting in settings)
+            {
+                string sourcePath = ResolvePresetFilePath(modPath, setting, setting.PendingValue);
+                if (string.IsNullOrWhiteSpace(sourcePath) || !File.Exists(sourcePath))
+                {
+                    throw new InvalidOperationException("Preset was not found: " + setting.PendingValue);
+                }
+
+                File.Copy(sourcePath, targetPath, true);
+            }
+        }
         private static void SaveKeyValueFile(string path, List<ConfigSetting> settings)
         {
             List<string> lines = File.ReadAllLines(path).ToList();
@@ -807,7 +991,17 @@ namespace SrslyModsManager
                 return "keyValue";
             }
 
-            return mode.Equals("xml", StringComparison.OrdinalIgnoreCase) ? "xml" : "keyValue";
+            if (mode.Equals("xml", StringComparison.OrdinalIgnoreCase))
+            {
+                return "xml";
+            }
+
+            if (mode.Equals("preset", StringComparison.OrdinalIgnoreCase))
+            {
+                return "preset";
+            }
+
+            return "keyValue";
         }
 
         private static string ReadXmlValue(string path, ConfigSetting setting)
@@ -1185,8 +1379,3 @@ namespace SrslyModsManager
         }
     }
 }
-
-
-
-
-
