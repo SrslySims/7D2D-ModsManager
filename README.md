@@ -1,4 +1,4 @@
-﻿# Mods Manager
+# Mods Manager
 
 Mods Manager is an in-game mod management menu for 7 Days To Die. It lets players review installed mods, enable or disable mod folders before loading a save, see mod details, check manifest-based update notices, and edit supported mod config values from inside the game menu.
 
@@ -26,7 +26,7 @@ A full game restart is required after enabling/disabling mods or saving config c
 
 Mods Manager can show richer information for your mod and can expose supported config options directly in-game. See the full creator guide:
 
-[Creator Config Guide *See WIKI]([docs/CREATOR_CONFIG_GUIDE.md](https://github.com/SrslySims/7D2D-ModsManager/wiki))
+[Creator Config Guide](https://github.com/SrslySims/7D2D-ModsManager/wiki/Creator-Config-Guide)
 
 ## Folder Layout
 
