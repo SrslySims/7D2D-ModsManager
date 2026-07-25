@@ -382,11 +382,14 @@ namespace SrslyModsManager
         internal string CurrentValue = "";
         internal string PendingValue = "";
         internal string DefaultValue = "";
+        internal string Placeholder = "";
         internal string Min = "";
         internal string Max = "";
         internal string Step = "";
         internal List<string> Options = new List<string>();
         internal bool RestartRequired = true;
+        internal bool Editable = true;
+        internal bool ManualOnly;
 
         internal bool IsDirty
         {
@@ -426,6 +429,22 @@ namespace SrslyModsManager
         }
         internal void Adjust(int direction)
         {
+            if (!Editable || ManualOnly)
+            {
+                return;
+            }
+
+            if (Type.Equals("text", StringComparison.OrdinalIgnoreCase))
+            {
+                string defaultText = TextDefaultValue();
+                if (!string.IsNullOrWhiteSpace(defaultText))
+                {
+                    PendingValue = defaultText;
+                }
+
+                return;
+            }
+
             if (Type.Equals("bool", StringComparison.OrdinalIgnoreCase))
             {
                 PendingValue = IsTruthy(PendingValue) ? "false" : "true";
@@ -470,6 +489,16 @@ namespace SrslyModsManager
             PendingValue = Type.Equals("int", StringComparison.OrdinalIgnoreCase)
                 ? decimal.Round(current).ToString(CultureInfo.InvariantCulture)
                 : current.ToString(CultureInfo.InvariantCulture);
+        }
+
+        internal string TextDefaultValue()
+        {
+            if (!string.IsNullOrWhiteSpace(DefaultValue))
+            {
+                return DefaultValue;
+            }
+
+            return Placeholder ?? "";
         }
 
         private static bool IsTruthy(string value)
@@ -593,7 +622,7 @@ namespace SrslyModsManager
             }
 
             Dictionary<string, List<ConfigSetting>> byTarget = settings
-                .Where(s => s != null && s.IsDirty)
+                .Where(s => s != null && s.IsDirty && s.Editable && !s.ManualOnly)
                 .GroupBy(s => BuildSaveGroupKey(modPath, s), StringComparer.OrdinalIgnoreCase)
                 .ToDictionary(g => g.Key, g => g.ToList(), StringComparer.OrdinalIgnoreCase);
 
@@ -715,11 +744,19 @@ namespace SrslyModsManager
                 Presets = FirstNonEmpty(Attr(element, "presets"), "Presets"),
                 PresetFile = Attr(element, "presetFile"),
                 DefaultValue = Attr(element, "default"),
+                Placeholder = Attr(element, "placeholder"),
                 Min = Attr(element, "min"),
                 Max = Attr(element, "max"),
                 Step = Attr(element, "step"),
-                RestartRequired = !Attr(element, "restartRequired").Equals("false", StringComparison.OrdinalIgnoreCase)
+                RestartRequired = !Attr(element, "restartRequired").Equals("false", StringComparison.OrdinalIgnoreCase),
+                Editable = !Attr(element, "editable").Equals("false", StringComparison.OrdinalIgnoreCase),
+                ManualOnly = IsTruthy(FirstNonEmpty(Attr(element, "manualOnly"), Attr(element, "locked")))
             };
+
+            if (setting.ManualOnly)
+            {
+                setting.Editable = false;
+            }
 
             string options = Attr(element, "options");
             if (!string.IsNullOrWhiteSpace(options))
@@ -1112,6 +1149,15 @@ namespace SrslyModsManager
             return element.HasAttribute(name) ? element.GetAttribute(name).Trim() : "";
         }
 
+        private static bool IsTruthy(string value)
+        {
+            return value != null
+                && (value.Equals("true", StringComparison.OrdinalIgnoreCase)
+                    || value.Equals("1", StringComparison.OrdinalIgnoreCase)
+                    || value.Equals("yes", StringComparison.OrdinalIgnoreCase)
+                    || value.Equals("on", StringComparison.OrdinalIgnoreCase));
+        }
+
         private static string FirstNonEmpty(string first, string second)
         {
             return string.IsNullOrWhiteSpace(first) ? second : first;
@@ -1309,6 +1355,15 @@ namespace SrslyModsManager
         {
             string value;
             return values.TryGetValue(name, out value) ? value : "";
+        }
+
+        private static bool IsTruthy(string value)
+        {
+            return value != null
+                && (value.Equals("true", StringComparison.OrdinalIgnoreCase)
+                    || value.Equals("1", StringComparison.OrdinalIgnoreCase)
+                    || value.Equals("yes", StringComparison.OrdinalIgnoreCase)
+                    || value.Equals("on", StringComparison.OrdinalIgnoreCase));
         }
 
         private static string FirstNonEmpty(string first, string second)

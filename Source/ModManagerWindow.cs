@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Globalization;
@@ -373,13 +373,14 @@ namespace SrslyModsManager
         {
             ManagedMod mod = CurrentSelected();
             ConfigSetting setting = ConfigSettingAt(mod, configTopIndex + row);
-            if (setting == null)
+            if (setting == null || !CanAdjustConfig(setting))
             {
                 return;
             }
 
             setting.Adjust(direction);
             RefreshUi();
+            SyncConfigInput(row, setting);
         }
 
         private void OnConfigInputChanged(int row, string text, bool changeFromCode)
@@ -391,13 +392,13 @@ namespace SrslyModsManager
 
             ManagedMod mod = CurrentSelected();
             ConfigSetting setting = ConfigSettingAt(mod, configTopIndex + row);
-            if (setting == null)
+            if (setting == null || !IsEditableTextConfig(setting))
             {
                 return;
             }
 
             setting.PendingValue = text ?? "";
-            RefreshUi();
+            RefreshBindings();
         }
 
         private void SaveConfigSettings()
@@ -587,9 +588,39 @@ namespace SrslyModsManager
             }
         }
 
-        private void RefreshUi()
+
+        private void SyncConfigInputs()
+        {
+            ManagedMod mod = CurrentSelected();
+            for (int row = 0; row < ConfigRowCount; row++)
+            {
+                ConfigSetting setting = ConfigSettingAt(mod, configTopIndex + row);
+                SyncConfigInput(row, setting);
+            }
+        }
+
+        private void SyncConfigInput(int row, ConfigSetting setting)
+        {
+            if (row < 0 || row >= configInputs.Length || !IsEditableTextConfig(setting))
+            {
+                return;
+            }
+
+            XUiC_TextInput input = configInputs[row];
+            if (input == null)
+            {
+                return;
+            }
+
+            string desired = ConfigInputValue(setting);
+            if (!string.Equals(input.Text ?? "", desired ?? "", StringComparison.Ordinal))
+            {
+                input.Text = desired ?? "";
+            }
+        }        private void RefreshUi()
         {
             RefreshBindings();
+            SyncConfigInputs();
             ApplySelectedImages();
         }
 
@@ -1113,12 +1144,17 @@ namespace SrslyModsManager
                 switch (field)
                 {
                     case "adjustenabled":
+                    case "inputvisible":
+                    case "inputenabled":
                     case "swatchvisible":
                         value = "false";
                         return true;
                     case "swatchcolor":
                     case "dirtycolor":
                         value = "0,0,0,0";
+                        return true;
+                    case "valuevisible":
+                        value = "true";
                         return true;
                     case "stripecolor":
                         value = "170,170,170,255";
@@ -1133,15 +1169,24 @@ namespace SrslyModsManager
             {
                 case "label": value = setting.Label; return true;
                 case "value": value = setting.PendingValue ?? ""; return true;
+                case "inputvalue": value = ConfigInputValue(setting); return true;
+                case "inputdisplay": value = ConfigInputDisplay(setting); return true;
+                case "inputdisplaycolor": value = ConfigInputDisplayColor(setting); return true;
                 case "displayvalue": value = setting.DisplayValue; return true;
+                case "valuevisible": value = IsEditableTextConfig(setting) ? "false" : "true"; return true;
+                case "inputvisible": value = IsEditableTextConfig(setting) ? "true" : "false"; return true;
+                case "inputenabled": value = IsEditableTextConfig(setting) ? "true" : "false"; return true;
+                case "placeholder": value = ConfigPlaceholder(setting); return true;
+                case "placeholdervisible": value = ShowConfigPlaceholder(setting) ? "true" : "false"; return true;
                 case "description": value = string.IsNullOrWhiteSpace(setting.Description) ? setting.Key : setting.Description; return true;
+                case "shortdescription": value = ShortConfigDescription(setting); return true;
                 case "color": value = ConfigValueColor(setting); return true;
                 case "swatchvisible": value = IsHexColor(setting.PendingValue) ? "true" : "false"; return true;
                 case "swatchcolor": value = HexToXuiColor(setting.PendingValue); return true;
-                case "stripecolor": value = setting.IsDirty ? "255,205,60,255" : "170,170,170,255"; return true;
+                case "stripecolor": value = ConfigStripeColor(setting); return true;
                 case "dirty": value = setting.IsDirty ? "CHANGED" : ""; return true;
                 case "dirtycolor": value = setting.IsDirty ? "255,205,60,255" : "0,0,0,0"; return true;
-                case "adjustenabled": value = setting.Type.Equals("text", StringComparison.OrdinalIgnoreCase) ? "false" : "true"; return true;
+                case "adjustenabled": value = CanAdjustConfig(setting) ? "true" : "false"; return true;
             }
 
             return false;
@@ -1169,8 +1214,112 @@ namespace SrslyModsManager
             return mod?.Info?.ConfigSettings != null && mod.Info.ConfigSettings.Any(s => s.IsDirty);
         }
 
+        private static bool IsEditableTextConfig(ConfigSetting setting)
+        {
+            return setting != null
+                && setting.Editable
+                && !setting.ManualOnly
+                && setting.Type.Equals("text", StringComparison.OrdinalIgnoreCase);
+        }
+        private static bool CanAdjustConfig(ConfigSetting setting)
+        {
+            if (setting == null || !setting.Editable || setting.ManualOnly)
+            {
+                return false;
+            }
+
+            if (setting.Type.Equals("text", StringComparison.OrdinalIgnoreCase))
+            {
+                return !string.IsNullOrWhiteSpace(setting.TextDefaultValue());
+            }
+
+            return true;
+        }
+
+        private static bool ShowConfigPlaceholder(ConfigSetting setting)
+        {
+            return false;
+        }
+
+        private static string ConfigInputValue(ConfigSetting setting)
+        {
+            if (!IsEditableTextConfig(setting))
+            {
+                return "";
+            }
+
+            return string.IsNullOrWhiteSpace(setting.PendingValue)
+                ? ConfigPlaceholder(setting)
+                : setting.PendingValue;
+        }
+
+        private static string ConfigInputDisplay(ConfigSetting setting)
+        {
+            if (!IsEditableTextConfig(setting))
+            {
+                return "";
+            }
+
+            return string.IsNullOrWhiteSpace(setting.PendingValue)
+                ? ConfigPlaceholder(setting)
+                : setting.PendingValue;
+        }
+
+        private static string ConfigInputDisplayColor(ConfigSetting setting)
+        {
+            if (!IsEditableTextConfig(setting))
+            {
+                return "0,0,0,0";
+            }
+
+            return string.IsNullOrWhiteSpace(setting.PendingValue)
+                ? "170,170,170,235"
+                : ConfigValueColor(setting);
+        }
+
+        private static string ConfigPlaceholder(ConfigSetting setting)
+        {
+            if (setting == null)
+            {
+                return "";
+            }
+
+            return FirstNonEmpty(setting.Placeholder, setting.DefaultValue);
+        }
+
+        private static string ShortConfigDescription(ConfigSetting setting)
+        {
+            string description = setting == null ? "" : FirstNonEmpty(setting.Description, setting.Key);
+            if (description.Length <= 58)
+            {
+                return description;
+            }
+
+            return description.Substring(0, 55).TrimEnd() + "...";
+        }
+
+        private static string ConfigStripeColor(ConfigSetting setting)
+        {
+            if (setting == null)
+            {
+                return "170,170,170,255";
+            }
+
+            if (setting.IsDirty)
+            {
+                return "255,205,60,255";
+            }
+
+            return setting.ManualOnly || !setting.Editable ? "210,135,55,255" : "170,170,170,255";
+        }
+
         private static string ConfigValueColor(ConfigSetting setting)
         {
+            if (setting != null && (setting.ManualOnly || !setting.Editable))
+            {
+                return "230,165,80,255";
+            }
+
             if (IsDefaultConfigValue(setting))
             {
                 return "190,120,255,255";
@@ -1503,9 +1652,3 @@ namespace SrslyModsManager
         }
     }
 }
-
-
-
-
-
-
